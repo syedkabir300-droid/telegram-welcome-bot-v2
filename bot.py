@@ -19,7 +19,7 @@ from aiohttp import web
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("TelanganaMasterBot")
 
-# Telegram API & Bot Credentials
+# Verified Credentials
 API_ID = int(os.environ.get("API_ID", "38476624"))
 API_HASH = os.environ.get("API_HASH", "6138b409afb06ddb68a735f360092e19")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "9174050495:AAGDdZ-Tm6NLxDs0Pqz_l1dmGKschjz55Cs")
@@ -129,15 +129,27 @@ SYSTEM_STATE = {
     "GROUP_PROTECTION": False,
     "WAITING_ADMIN_INPUT": set(),
     "WAITING_DEL_ADMIN": set(),
-    "SET_MEDIA_MODE": None
+    "UPLOAD_STATE": {}
 }
 
 def get_dashboard_keyboard(user_id):
     prot_txt = "🟢 ACTIVE" if SYSTEM_STATE["GROUP_PROTECTION"] else "🔴 STOPPED"
 
+    vid_st = "✅" if db_get_setting("CUSTOM_VIDEO_ID") else "❌"
+    doc_st = "✅" if db_get_setting("CUSTOM_DOC_ID") else "❌"
+    aud_st = "✅" if db_get_setting("CUSTOM_VOICE_ID") else "❌"
+
     buttons = [
         [
             InlineKeyboardButton(f"🛡️ GROUP LINK GUARD [{prot_txt}]", callback_data="toggle_guard")
+        ],
+        [
+            InlineKeyboardButton(f"📹 SET VIDEO [{vid_st}]", callback_data="btn_upload_video"),
+            InlineKeyboardButton(f"📁 SET FILE/APK [{doc_st}]", callback_data="btn_upload_doc")
+        ],
+        [
+            InlineKeyboardButton(f"🎙️ SET VOICE [{aud_st}]", callback_data="btn_upload_voice"),
+            InlineKeyboardButton("📦 SEND MEDIA KIT", callback_data="btn_send_media_kit")
         ],
         [
             InlineKeyboardButton("👤 ADD ADMIN", callback_data="btn_add_admin"),
@@ -145,12 +157,6 @@ def get_dashboard_keyboard(user_id):
         ],
         [
             InlineKeyboardButton("📊 ADMINS & EXPIRY TABLE", callback_data="btn_show_table")
-        ],
-        [
-            InlineKeyboardButton("📦 BROADCAST PROMO KIT", callback_data="btn_send_promo_kit")
-        ],
-        [
-            InlineKeyboardButton("⚙️ SET MEDIA (VIDEO/APK/VOICE)", callback_data="btn_set_promo_media")
         ]
     ]
 
@@ -164,51 +170,69 @@ def get_dashboard_text(user_id):
 
     return (
         "╔════════════════════════════╗\n"
-        "  👑 **ADMIN & CHANNEL GUARD BOT** 👑\n"
+        "  👑 **TELANGANA MASTER BOT - ADMIN PANEL** 👑\n"
         "╚════════════════════════════╝\n\n"
-        f"👤 **Access Level:** `{'OWNER (Full)' if user_id == OWNER_ID else f'AGENT ({perms})'}`\n"
+        f"👤 **Role:** `{'OWNER (Full)' if user_id == OWNER_ID else f'ADMIN ({perms})'}`\n"
         f"⏳ **Validity:** `{exp_date if exp_date else 'Lifetime'}`\n"
-        f"🏢 **Connected Chats:** `{groups_count}` Groups | 👮 **Sub-Admins:** `{sub_admins}`\n"
+        f"🏢 **Connected Chats:** `{groups_count}` | 👮 **Sub-Admins:** `{sub_admins}`\n"
         f"🛡️ **Anti-Link Guard:** {prot_status}\n\n"
-        "**Neeche diye gaye buttons se operate karein:**"
+        "Neeche diye gaye buttons se Media upload karein ya controls operate karein:"
     )
 
-async def send_promo_kit_to_groups():
-    groups = db_get_all_groups()
-    vid_id = db_get_setting("PROMO_VIDEO")
-    apk_id = db_get_setting("PROMO_APK")
-    voice_id = db_get_setting("PROMO_VOICE")
+async def deliver_custom_bundle(target_chat_id):
+    vid = db_get_setting("CUSTOM_VIDEO_ID")
+    doc = db_get_setting("CUSTOM_DOC_ID")
+    aud = db_get_setting("CUSTOM_VOICE_ID")
 
-    for cid, title in groups:
+    sent_any = False
+    if vid:
         try:
-            if vid_id:
-                await bot.send_video(cid, video=vid_id, caption="✅ **ACTIVATION VIDEO**")
-                await asyncio.sleep(1)
-
-            if apk_id:
-                await bot.send_document(cid, document=apk_id, caption="📁 **OFFICIAL APPLICATION / PANEL**")
-                await asyncio.sleep(1)
-
-            if voice_id:
-                await bot.send_voice(cid, voice=voice_id, caption="🎙️ **IMPORTANT VOICE NOTE**")
-
+            await bot.send_video(
+                target_chat_id,
+                video=vid,
+                caption="✅ **WATCH ACTIVATION VIDEO**"
+            )
+            sent_any = True
+            await asyncio.sleep(1)
         except Exception as e:
-            logger.error(f"Promo broadcast error in {title} ({cid}): {e}")
+            logger.error(f"Send video error: {e}")
+
+    if doc:
+        try:
+            doc_caption = "📁 **APPLICATION / PANEL FILE**"
+            await bot.send_document(target_chat_id, document=doc, caption=doc_caption)
+            sent_any = True
+            await asyncio.sleep(1)
+        except Exception as e:
+            logger.error(f"Send doc error: {e}")
+
+    if aud:
+        try:
+            await bot.send_voice(target_chat_id, voice=aud, caption="🎙️ **IMPORTANT VOICE NOTE**")
+            sent_any = True
+        except Exception as e:
+            logger.error(f"Send voice error: {e}")
+
+    return sent_any
 
 @bot.on_message(filters.command("start") & filters.private)
 async def start_private_cmd(client, message):
     uid = message.from_user.id
     has_access, _, _ = check_user_access(uid)
-    if not has_access:
-        await message.reply_text("🔒 **Access Denied:** Aapke paas is bot ka access nahi hai.")
+
+    if has_access:
+        await message.reply_text(get_dashboard_text(uid), reply_markup=get_dashboard_keyboard(uid))
         return
-    await message.reply_text(get_dashboard_text(uid), reply_markup=get_dashboard_keyboard(uid))
+
+    sent = await deliver_custom_bundle(message.chat.id)
+    if not sent:
+        await message.reply_text("👋 Welcome! Bot media is currently being updated.")
 
 @bot.on_message(filters.command("start") & (filters.group | filters.channel))
 async def start_group_cmd(client, message):
     db_add_group(message.chat.id, message.chat.title or "Telegram Chat")
     try:
-        ack = await message.reply_text("🛡️ **Group registered successfully.**")
+        ack = await message.reply_text("🛡️ **Group registered for updates and media.**")
         await asyncio.sleep(3)
         await ack.delete()
     except Exception:
@@ -238,23 +262,29 @@ async def auto_group_guard(client, message):
                 logger.error(f"Auto delete fail: {e}")
 
 @bot.on_message(filters.video & filters.private)
-async def catch_promo_video(client, message):
-    if message.from_user.id == OWNER_ID:
-        db_set_setting("PROMO_VIDEO", message.video.file_id)
-        await message.reply_text("✅ **Video Saved Successfully!**", reply_markup=get_dashboard_keyboard(message.from_user.id))
+async def catch_video_upload(client, message):
+    uid = message.from_user.id
+    if SYSTEM_STATE["UPLOAD_STATE"].get(uid) == "VIDEO" or uid == OWNER_ID:
+        db_set_setting("CUSTOM_VIDEO_ID", message.video.file_id)
+        SYSTEM_STATE["UPLOAD_STATE"].pop(uid, None)
+        await message.reply_text("✅ **Aapki Video successfully save ho chuki hai!**", reply_markup=get_dashboard_keyboard(uid))
 
 @bot.on_message(filters.document & filters.private)
-async def catch_promo_apk(client, message):
-    if message.from_user.id == OWNER_ID:
-        db_set_setting("PROMO_APK", message.document.file_id)
-        await message.reply_text("✅ **Document/File Saved Successfully!**", reply_markup=get_dashboard_keyboard(message.from_user.id))
+async def catch_doc_upload(client, message):
+    uid = message.from_user.id
+    if SYSTEM_STATE["UPLOAD_STATE"].get(uid) == "DOC" or uid == OWNER_ID:
+        db_set_setting("CUSTOM_DOC_ID", message.document.file_id)
+        SYSTEM_STATE["UPLOAD_STATE"].pop(uid, None)
+        await message.reply_text("✅ **Aapki File/APK successfully save ho chuki hai!**", reply_markup=get_dashboard_keyboard(uid))
 
 @bot.on_message((filters.voice | filters.audio) & filters.private)
-async def catch_promo_voice(client, message):
+async def catch_voice_upload(client, message):
+    uid = message.from_user.id
     fid = message.voice.file_id if message.voice else message.audio.file_id
-    if message.from_user.id == OWNER_ID:
-        db_set_setting("PROMO_VOICE", fid)
-        await message.reply_text("✅ **Voice Note Saved Successfully!**", reply_markup=get_dashboard_keyboard(message.from_user.id))
+    if SYSTEM_STATE["UPLOAD_STATE"].get(uid) == "VOICE" or uid == OWNER_ID:
+        db_set_setting("CUSTOM_VOICE_ID", fid)
+        SYSTEM_STATE["UPLOAD_STATE"].pop(uid, None)
+        await message.reply_text("✅ **Aapka Voice Note successfully save ho chuka hai!**", reply_markup=get_dashboard_keyboard(uid))
 
 @bot.on_message(filters.text & filters.private & ~filters.command(["start"]))
 async def message_dispatcher(client, message):
@@ -265,10 +295,10 @@ async def message_dispatcher(client, message):
         SYSTEM_STATE["WAITING_ADMIN_INPUT"].remove(uid)
         parts = txt.split()
         if len(parts) < 4:
-            await message.reply_text("❌ Format:\n`<Username/UserID> <GroupUsername/Link/ID> <Permissions> <Days>`")
+            await message.reply_text("❌ Format: `<@Username> <@GroupLink> <Permissions> <Days>`\nEx: `@Aayan85 @mygroup ALL 30`")
             return
 
-        prog = await message.reply_text("⏳ Verifying...")
+        prog = await message.reply_text("⏳ Verifying details...")
         raw_user, raw_group, perms, raw_days = parts[0], parts[1], parts[2].upper(), parts[3]
 
         target_uid = None
@@ -276,11 +306,6 @@ async def message_dispatcher(client, message):
         try:
             if raw_user.replace("-", "").isdigit():
                 target_uid = int(raw_user)
-                try:
-                    u_obj = await bot.get_users(target_uid)
-                    target_uname = u_obj.username or u_obj.first_name
-                except Exception:
-                    pass
             else:
                 u_obj = await bot.get_users(raw_user)
                 target_uid = u_obj.id
@@ -306,15 +331,12 @@ async def message_dispatcher(client, message):
         try:
             days = int(raw_days)
             exp_date = (datetime.now(timezone.utc) + timedelta(days=days)).strftime("%Y-%m-%d")
+
             db_add_sub_admin(target_uid, target_uname, target_gid, perms, exp_date)
             db_add_group(target_gid, target_gtitle)
 
             await prog.edit_text(
-                f"✅ **Sub-Admin Added!**\n\n"
-                f"👤 Admin: @{target_uname} (`{target_uid}`)\n"
-                f"🏢 Group: {target_gtitle} (`{target_gid}`)\n"
-                f"🛡️ Perms: `{perms}`\n"
-                f"📅 Expiry: `{exp_date}` ({days} Din)",
+                f"✅ **Admin Added:** @{target_uname}\n🏢 **Group:** {target_gtitle}\n📅 **Expiry:** `{exp_date}` ({days} Din)",
                 reply_markup=get_dashboard_keyboard(uid)
             )
         except Exception as ex:
@@ -324,7 +346,7 @@ async def message_dispatcher(client, message):
     if uid in SYSTEM_STATE["WAITING_DEL_ADMIN"]:
         SYSTEM_STATE["WAITING_DEL_ADMIN"].remove(uid)
         db_remove_sub_admin_by_identifier(txt)
-        await message.reply_text(f"🗑️ Admin `{txt}` access remove kar diya gaya.", reply_markup=get_dashboard_keyboard(uid))
+        await message.reply_text(f"🗑️ Admin `{txt}` access revoked.", reply_markup=get_dashboard_keyboard(uid))
         return
 
 @bot.on_callback_query()
@@ -347,55 +369,63 @@ async def callback_dispatcher(client, query):
             pass
         return
 
+    elif d == "btn_upload_video":
+        SYSTEM_STATE["UPLOAD_STATE"][uid] = "VIDEO"
+        await query.answer()
+        await query.message.reply_text("📹 **Ab chat me Video bhej dein, bot use turant save kar lega.**")
+
+    elif d == "btn_upload_doc":
+        SYSTEM_STATE["UPLOAD_STATE"][uid] = "DOC"
+        await query.answer()
+        await query.message.reply_text("📁 **Ab chat me koi bhi File / APK bhej dein, bot use save kar lega.**")
+
+    elif d == "btn_upload_voice":
+        SYSTEM_STATE["UPLOAD_STATE"][uid] = "VOICE"
+        await query.answer()
+        await query.message.reply_text("🎙️ **Ab chat me koi bhi Voice recording bhej dein, bot use save kar lega.**")
+
+    elif d == "btn_send_media_kit":
+        await query.answer("📦 Registered groups me media kit post ho rahi hai...", show_alert=True)
+        groups = db_get_all_groups()
+        for cid, title in groups:
+            await deliver_custom_bundle(cid)
+        await query.message.reply_text("✅ **Saved Video, File aur Voice Note sabhi groups me post ho chuke hain!**")
+
     elif d == "btn_add_admin":
         if uid != OWNER_ID:
-            await query.answer("Sirf Owner Admin add kar sakta hai!", show_alert=True)
+            await query.answer("Sirf Owner admin add kar sakta hai!", show_alert=True)
             return
-        await query.answer()
-        await query.message.reply_text("Format reply karein:\n`<Username> <GroupLink/Username> <Permissions> <Days>`\n\nExample:\n`@username @mygroup ALL 30`")
         SYSTEM_STATE["WAITING_ADMIN_INPUT"].add(uid)
-        return
+        await query.answer()
+        await query.message.reply_text("👤 Format me bhejein:\n`<@Username> <@GroupLink> <Permissions> <Days>`\nEx: `@Aayan85 @mygroup ALL 30`")
 
     elif d == "btn_delete_admin":
         if uid != OWNER_ID:
-            await query.answer("Sirf Owner Admin remove kar sakta hai!", show_alert=True)
+            await query.answer("Sirf Owner remove kar sakta hai!", show_alert=True)
             return
         SYSTEM_STATE["WAITING_DEL_ADMIN"].add(uid)
         await query.answer()
-        await query.message.reply_text("Admin ka **@username** ya **User ID** bhejein jise remove karna hai:")
-        return
+        await query.message.reply_text("🗑️ Jis Admin ko nikalna hai uska **@username** ya ID bhejein:")
 
     elif d == "btn_show_table":
         sub_admins = db_get_all_sub_admins()
-        txt = "📊 **ADMINS & EXPIRY TABLE:**\n════════════════════════════\n"
-        txt += f"👑 **MAIN OWNER:** `{OWNER_ID}` [LIFETIME]\n\n"
+        txt = "📊 **ACTIVE ADMINS & EXPIRY:**\n════════════════════════════\n"
+        txt += f"👑 **OWNER:** `{OWNER_ID}` [LIFETIME]\n\n"
         if not sub_admins:
-            txt += "_Koi Sub-Admin active nahi hai._\n"
+            txt += "_Koi sub-admin active nahi hai._\n"
         else:
             for a_uid, a_uname, a_gid, a_perms, a_exp in sub_admins:
                 txt += f"• **Admin:** @{a_uname}\n  └ Group: `{a_gid}` | Access: **{a_perms}** | Expiry: `{a_exp}`\n\n"
         await query.message.reply_text(txt)
         await query.answer()
-        return
-
-    elif d == "btn_send_promo_kit":
-        await query.answer("Broadcast bheja ja raha hai...", show_alert=True)
-        await send_promo_kit_to_groups()
-        await query.message.reply_text("✅ Promo Kit sent to all registered chats.")
-        return
-
-    elif d == "btn_set_promo_media":
-        await query.answer()
-        await query.message.reply_text("Direct chat me Video, Document (APK), ya Voice Note bhejein, bot use save kar lega.")
-        return
 
 async def start_services():
     try:
         await bot.start()
-        print("Unified Bot Live with Verified Credentials 🚀", flush=True)
+        print("Telangana Unified Bot Live 🚀", flush=True)
 
         app = web.Application()
-        app.router.add_get('/', lambda r: web.Response(text="Bot 24/7 Running Active"))
+        app.router.add_get('/', lambda r: web.Response(text="Bot 24/7 Running"))
         runner = web.AppRunner(app)
         await runner.setup()
 
