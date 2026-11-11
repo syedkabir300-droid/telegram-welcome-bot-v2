@@ -1,4 +1,4 @@
-# Event loop ko Pyrogram import se pehle initiate kiya gaya hai (Python 3.14 Fix)
+# Event loop ko Pyrogram import hone se pehle initialize karna (Python 3.14 Fix)
 import asyncio
 try:
     loop = asyncio.get_event_loop()
@@ -19,7 +19,7 @@ from aiohttp import web
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("TelanganaMasterBot")
 
-# Verified Credentials
+# Verified New Credentials
 API_ID = int(os.environ.get("API_ID", "38476624"))
 API_HASH = os.environ.get("API_HASH", "6138b409afb06ddb68a735f360092e19")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "9174050495:AAGDdZ-Tm6NLxDs0Pqz_l1dmGKschjz55Cs")
@@ -65,6 +65,13 @@ def db_add_group(chat_id, title):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("INSERT OR REPLACE INTO groups VALUES (?, ?)", (chat_id, title))
+    conn.commit()
+    conn.close()
+
+def db_remove_group(chat_id):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("DELETE FROM groups WHERE chat_id = ?", (chat_id,))
     conn.commit()
     conn.close()
 
@@ -129,34 +136,40 @@ SYSTEM_STATE = {
     "GROUP_PROTECTION": False,
     "WAITING_ADMIN_INPUT": set(),
     "WAITING_DEL_ADMIN": set(),
+    "SET_PHOTO_MODE": None,
     "UPLOAD_STATE": {}
 }
 
 def get_dashboard_keyboard(user_id):
-    prot_txt = "🟢 ACTIVE" if SYSTEM_STATE["GROUP_PROTECTION"] else "🔴 STOPPED"
+    prot_st = "🟢 24H ON" if SYSTEM_STATE["GROUP_PROTECTION"] else "🔴 OFF"
 
+    big_st = "✅" if db_get_setting("BIG_PHOTO") else "❌"
+    small_st = "✅" if db_get_setting("SMALL_PHOTO") else "❌"
     vid_st = "✅" if db_get_setting("CUSTOM_VIDEO_ID") else "❌"
     doc_st = "✅" if db_get_setting("CUSTOM_DOC_ID") else "❌"
-    aud_st = "✅" if db_get_setting("CUSTOM_VOICE_ID") else "❌"
 
     buttons = [
         [
-            InlineKeyboardButton(f"🛡️ GROUP LINK GUARD [{prot_txt}]", callback_data="toggle_guard")
+            InlineKeyboardButton(f"🛡️ ANTI-LINK GUARD [{prot_st}]", callback_data="toggle_guard")
+        ],
+        [
+            InlineKeyboardButton(f"🖼️ SET BANNER 1 [{big_st}]", callback_data="btn_set_big_photo"),
+            InlineKeyboardButton(f"🖼️ SET BANNER 2 [{small_st}]", callback_data="btn_set_small_photo")
         ],
         [
             InlineKeyboardButton(f"📹 SET VIDEO [{vid_st}]", callback_data="btn_upload_video"),
             InlineKeyboardButton(f"📁 SET FILE/APK [{doc_st}]", callback_data="btn_upload_doc")
         ],
         [
-            InlineKeyboardButton(f"🎙️ SET VOICE [{aud_st}]", callback_data="btn_upload_voice"),
-            InlineKeyboardButton("📦 SEND MEDIA KIT", callback_data="btn_send_media_kit")
+            InlineKeyboardButton("📦 BROADCAST MEDIA KIT", callback_data="btn_send_media_kit")
         ],
         [
             InlineKeyboardButton("👤 ADD ADMIN", callback_data="btn_add_admin"),
             InlineKeyboardButton("🗑️ REMOVE ADMIN", callback_data="btn_delete_admin")
         ],
         [
-            InlineKeyboardButton("📊 ADMINS & EXPIRY TABLE", callback_data="btn_show_table")
+            InlineKeyboardButton("📊 ADMINS & EXPIRY TABLE", callback_data="btn_show_table"),
+            InlineKeyboardButton("🏢 CONNECTED CHATS", callback_data="list_groups_btn")
         ]
     ]
 
@@ -170,28 +183,33 @@ def get_dashboard_text(user_id):
 
     return (
         "╔════════════════════════════╗\n"
-        "  👑 **TELANGANA MASTER BOT - ADMIN PANEL** 👑\n"
+        "  👑 **TELANGANA MASTER BOT - CONTROL PANEL** 👑\n"
         "╚════════════════════════════╝\n\n"
         f"👤 **Role:** `{'OWNER (Full)' if user_id == OWNER_ID else f'ADMIN ({perms})'}`\n"
         f"⏳ **Validity:** `{exp_date if exp_date else 'Lifetime'}`\n"
         f"🏢 **Connected Chats:** `{groups_count}` | 👮 **Sub-Admins:** `{sub_admins}`\n"
         f"🛡️ **Anti-Link Guard:** {prot_status}\n\n"
-        "Neeche diye gaye buttons se Media upload karein ya controls operate karein:"
+        "Neeche buttons se media upload karein aur settings manage karein:"
     )
 
 async def deliver_custom_bundle(target_chat_id):
     vid = db_get_setting("CUSTOM_VIDEO_ID")
     doc = db_get_setting("CUSTOM_DOC_ID")
-    aud = db_get_setting("CUSTOM_VOICE_ID")
+    p1 = db_get_setting("BIG_PHOTO")
+    p2 = db_get_setting("SMALL_PHOTO")
 
     sent_any = False
+    if p1:
+        try:
+            await bot.send_photo(target_chat_id, photo=p1, caption="📢 **OFFICIAL ANNOUNCEMENT**")
+            sent_any = True
+            await asyncio.sleep(1)
+        except Exception as e:
+            logger.error(f"Send photo error: {e}")
+
     if vid:
         try:
-            await bot.send_video(
-                target_chat_id,
-                video=vid,
-                caption="✅ **WATCH ACTIVATION VIDEO**"
-            )
+            await bot.send_video(target_chat_id, video=vid, caption="✅ **ACTIVATION VIDEO**")
             sent_any = True
             await asyncio.sleep(1)
         except Exception as e:
@@ -199,19 +217,11 @@ async def deliver_custom_bundle(target_chat_id):
 
     if doc:
         try:
-            doc_caption = "📁 **APPLICATION / PANEL FILE**"
-            await bot.send_document(target_chat_id, document=doc, caption=doc_caption)
+            await bot.send_document(target_chat_id, document=doc, caption="📁 **OFFICIAL FILE / APPLICATION**")
             sent_any = True
             await asyncio.sleep(1)
         except Exception as e:
             logger.error(f"Send doc error: {e}")
-
-    if aud:
-        try:
-            await bot.send_voice(target_chat_id, voice=aud, caption="🎙️ **IMPORTANT VOICE NOTE**")
-            sent_any = True
-        except Exception as e:
-            logger.error(f"Send voice error: {e}")
 
     return sent_any
 
@@ -226,13 +236,13 @@ async def start_private_cmd(client, message):
 
     sent = await deliver_custom_bundle(message.chat.id)
     if not sent:
-        await message.reply_text("👋 Welcome! Bot media is currently being updated.")
+        await message.reply_text("👋 Welcome! Bot media is currently being initialized.")
 
 @bot.on_message(filters.command("start") & (filters.group | filters.channel))
 async def start_group_cmd(client, message):
     db_add_group(message.chat.id, message.chat.title or "Telegram Chat")
     try:
-        ack = await message.reply_text("🛡️ **Group registered for updates and media.**")
+        ack = await message.reply_text("🛡️ **Group registered successfully.**")
         await asyncio.sleep(3)
         await ack.delete()
     except Exception:
@@ -261,13 +271,29 @@ async def auto_group_guard(client, message):
             except Exception as e:
                 logger.error(f"Auto delete fail: {e}")
 
+@bot.on_message(filters.photo & filters.private)
+async def auto_save_photo(client, message):
+    uid = message.from_user.id
+    fid = message.photo.file_id
+    mode = SYSTEM_STATE.get("SET_PHOTO_MODE")
+    if mode == "BIG" or uid == OWNER_ID:
+        db_set_setting("BIG_PHOTO", fid)
+        SYSTEM_STATE["SET_PHOTO_MODE"] = None
+        await message.reply_text("✅ **Banner 1 Photo successfully save ho gayi!**", reply_markup=get_dashboard_keyboard(uid))
+    elif mode == "SMALL":
+        db_set_setting("SMALL_PHOTO", fid)
+        SYSTEM_STATE["SET_PHOTO_MODE"] = None
+        await message.reply_text("✅ **Banner 2 Photo successfully save ho gayi!**", reply_markup=get_dashboard_keyboard(uid))
+    else:
+        await message.reply_text("📸 Photo save karne ke liye pehle Dashboard se Banner button click karein.")
+
 @bot.on_message(filters.video & filters.private)
 async def catch_video_upload(client, message):
     uid = message.from_user.id
     if SYSTEM_STATE["UPLOAD_STATE"].get(uid) == "VIDEO" or uid == OWNER_ID:
         db_set_setting("CUSTOM_VIDEO_ID", message.video.file_id)
         SYSTEM_STATE["UPLOAD_STATE"].pop(uid, None)
-        await message.reply_text("✅ **Aapki Video successfully save ho chuki hai!**", reply_markup=get_dashboard_keyboard(uid))
+        await message.reply_text("✅ **Video successfully save ho chuki hai!**", reply_markup=get_dashboard_keyboard(uid))
 
 @bot.on_message(filters.document & filters.private)
 async def catch_doc_upload(client, message):
@@ -275,16 +301,7 @@ async def catch_doc_upload(client, message):
     if SYSTEM_STATE["UPLOAD_STATE"].get(uid) == "DOC" or uid == OWNER_ID:
         db_set_setting("CUSTOM_DOC_ID", message.document.file_id)
         SYSTEM_STATE["UPLOAD_STATE"].pop(uid, None)
-        await message.reply_text("✅ **Aapki File/APK successfully save ho chuki hai!**", reply_markup=get_dashboard_keyboard(uid))
-
-@bot.on_message((filters.voice | filters.audio) & filters.private)
-async def catch_voice_upload(client, message):
-    uid = message.from_user.id
-    fid = message.voice.file_id if message.voice else message.audio.file_id
-    if SYSTEM_STATE["UPLOAD_STATE"].get(uid) == "VOICE" or uid == OWNER_ID:
-        db_set_setting("CUSTOM_VOICE_ID", fid)
-        SYSTEM_STATE["UPLOAD_STATE"].pop(uid, None)
-        await message.reply_text("✅ **Aapka Voice Note successfully save ho chuka hai!**", reply_markup=get_dashboard_keyboard(uid))
+        await message.reply_text("✅ **Document/File successfully save ho chuki hai!**", reply_markup=get_dashboard_keyboard(uid))
 
 @bot.on_message(filters.text & filters.private & ~filters.command(["start"]))
 async def message_dispatcher(client, message):
@@ -295,7 +312,7 @@ async def message_dispatcher(client, message):
         SYSTEM_STATE["WAITING_ADMIN_INPUT"].remove(uid)
         parts = txt.split()
         if len(parts) < 4:
-            await message.reply_text("❌ Format: `<@Username> <@GroupLink> <Permissions> <Days>`\nEx: `@Aayan85 @mygroup ALL 30`")
+            await message.reply_text("❌ Format: `<@Username> <@GroupLink> <Permissions> <Days>`\nEx: `@user @mygroup ALL 30`")
             return
 
         prog = await message.reply_text("⏳ Verifying details...")
@@ -369,27 +386,37 @@ async def callback_dispatcher(client, query):
             pass
         return
 
+    elif d == "btn_set_big_photo":
+        SYSTEM_STATE["SET_PHOTO_MODE"] = "BIG"
+        await query.answer()
+        await query.message.reply_text("📸 **Chat mein Banner 1 photo bhej kar save karein.**")
+        return
+
+    elif d == "btn_set_small_photo":
+        SYSTEM_STATE["SET_PHOTO_MODE"] = "SMALL"
+        await query.answer()
+        await query.message.reply_text("📸 **Chat mein Banner 2 photo bhej kar save karein.**")
+        return
+
     elif d == "btn_upload_video":
         SYSTEM_STATE["UPLOAD_STATE"][uid] = "VIDEO"
         await query.answer()
-        await query.message.reply_text("📹 **Ab chat me Video bhej dein, bot use turant save kar lega.**")
+        await query.message.reply_text("📹 **Chat mein Video bhej dein, bot use save kar lega.**")
+        return
 
     elif d == "btn_upload_doc":
         SYSTEM_STATE["UPLOAD_STATE"][uid] = "DOC"
         await query.answer()
-        await query.message.reply_text("📁 **Ab chat me koi bhi File / APK bhej dein, bot use save kar lega.**")
-
-    elif d == "btn_upload_voice":
-        SYSTEM_STATE["UPLOAD_STATE"][uid] = "VOICE"
-        await query.answer()
-        await query.message.reply_text("🎙️ **Ab chat me koi bhi Voice recording bhej dein, bot use save kar lega.**")
+        await query.message.reply_text("📁 **Chat mein koi bhi File / APK bhej dein, bot save kar lega.**")
+        return
 
     elif d == "btn_send_media_kit":
-        await query.answer("📦 Registered groups me media kit post ho rahi hai...", show_alert=True)
+        await query.answer("Broadcast bheja ja raha hai...", show_alert=True)
         groups = db_get_all_groups()
         for cid, title in groups:
             await deliver_custom_bundle(cid)
-        await query.message.reply_text("✅ **Saved Video, File aur Voice Note sabhi groups me post ho chuke hain!**")
+        await query.message.reply_text("✅ **Media kit registered groups me send ho chuki hai.**")
+        return
 
     elif d == "btn_add_admin":
         if uid != OWNER_ID:
@@ -397,7 +424,8 @@ async def callback_dispatcher(client, query):
             return
         SYSTEM_STATE["WAITING_ADMIN_INPUT"].add(uid)
         await query.answer()
-        await query.message.reply_text("👤 Format me bhejein:\n`<@Username> <@GroupLink> <Permissions> <Days>`\nEx: `@Aayan85 @mygroup ALL 30`")
+        await query.message.reply_text("👤 Format me bhejein:\n`<@Username> <@GroupLink> <Permissions> <Days>`\nEx: `@user @mygroup ALL 30`")
+        return
 
     elif d == "btn_delete_admin":
         if uid != OWNER_ID:
@@ -406,6 +434,7 @@ async def callback_dispatcher(client, query):
         SYSTEM_STATE["WAITING_DEL_ADMIN"].add(uid)
         await query.answer()
         await query.message.reply_text("🗑️ Jis Admin ko nikalna hai uska **@username** ya ID bhejein:")
+        return
 
     elif d == "btn_show_table":
         sub_admins = db_get_all_sub_admins()
@@ -418,14 +447,27 @@ async def callback_dispatcher(client, query):
                 txt += f"• **Admin:** @{a_uname}\n  └ Group: `{a_gid}` | Access: **{a_perms}** | Expiry: `{a_exp}`\n\n"
         await query.message.reply_text(txt)
         await query.answer()
+        return
+
+    elif d == "list_groups_btn":
+        groups = db_get_all_groups()
+        if not groups:
+            await query.answer("Koi group registered nahi hai.", show_alert=True)
+            return
+        txt = "🏢 **CONNECTED GROUPS:**\n════════════════════════════\n"
+        for cid, title in groups:
+            txt += f"• **{title}** (`{cid}`)\n"
+        await query.message.reply_text(txt)
+        await query.answer()
+        return
 
 async def start_services():
     try:
         await bot.start()
-        print("Telangana Unified Bot Live 🚀", flush=True)
+        print("Unified Bot Live with Verified Credentials 🚀", flush=True)
 
         app = web.Application()
-        app.router.add_get('/', lambda r: web.Response(text="Bot 24/7 Running"))
+        app.router.add_get('/', lambda r: web.Response(text="Bot 24/7 Running Active"))
         runner = web.AppRunner(app)
         await runner.setup()
 
