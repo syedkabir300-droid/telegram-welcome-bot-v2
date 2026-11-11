@@ -1,7 +1,14 @@
+# Event Loop ko Pyrogram import hone se pehle shuru karna (Python 3.14 Crash Fix)
+import asyncio
+try:
+    loop = asyncio.get_event_loop()
+except RuntimeError:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
 import os
 import sys
 import json
-import asyncio
 import random
 import sqlite3
 import logging
@@ -18,6 +25,7 @@ from pyrogram.raw.types import InputGroupCall, DataJSON, InputPeerSelf
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("TelanganaMasterBot")
 
+# Verified New Credentials Connected
 API_ID = int(os.environ.get("API_ID", "38476624"))
 API_HASH = os.environ.get("API_HASH", "6138b409afb06ddb68a735f360092e19")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "9174050495:AAGDdZ-Tm6NLxDs0Pqz_l1dmGKschjz55Cs")
@@ -27,15 +35,12 @@ bot = Client("master_unified_bot", api_id=API_ID, api_hash=API_HASH, bot_token=B
 
 DB_FILE = "master_database.db"
 
-VIP_REGISTER_LINK = "https://bdg4.vip//#/register?invitationCode=1921324032297"
-
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS accounts (phone TEXT PRIMARY KEY, session TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS groups (chat_id INTEGER PRIMARY KEY, title TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS bot_settings (key TEXT PRIMARY KEY, val TEXT)''')
-    # Table for Sub-Admins, Agents, Permissions & Expiry Dates
     c.execute('''CREATE TABLE IF NOT EXISTS sub_admins (
         user_id INTEGER PRIMARY KEY,
         group_id INTEGER,
@@ -148,8 +153,6 @@ SYSTEM_STATE = {
     "PROXY_PROTECTION": True,
     "GROUP_PROTECTION": False,
     "AUTO_VIEWS": True,
-    "PREDICTION_TASK": None,
-    "LAST_PREDICTION": None,
     "REACTIONS": ["🔥", "⚡", "🚀", "👑", "🎯", "💎", "💯", "👍", "❤️"],
     "LOGIN_TEMP": {},
     "CURRENT_TARGET": None,
@@ -173,7 +176,7 @@ def get_dashboard_keyboard(user_id):
         ],
         [
             InlineKeyboardButton("🛡️ START 24H PROTECTION", callback_data="start_24h_protection"),
-            InlineKeyboardButton("🛑 STOP 24H PROTECTION", callback_data="stop_24h_protection")
+            InlineKeyboardButton(f"🛑 STOP 24H PROTECTION [{prot_st}]", callback_data="stop_24h_protection")
         ],
         [
             InlineKeyboardButton("📅 DATE & ACCESS MANAGER", callback_data="btn_admin_manager"),
@@ -206,118 +209,22 @@ def get_dashboard_text(user_id):
     saved_count = len(db_get_all_sessions())
     active_count = len(SYSTEM_STATE["ACTIVE_USER_CLIENTS"])
     groups_count = len(db_get_all_groups())
-    prot_status = "🟢 24H Active (Clean Signal Mode)" if SYSTEM_STATE["GROUP_PROTECTION"] else "🔴 Stopped"
+    prot_status = "🟢 24H Guard Active" if SYSTEM_STATE["GROUP_PROTECTION"] else "🔴 Stopped"
     sub_admins = len(db_get_all_sub_admins())
 
     return (
         "╔════════════════════════════╗\n"
-        "  👑 **TELANGANA SURE SHOT TRADING BADSHAH** 👑\n"
-        "     ⚡ **VIP VC BOOSTER & PREDICTION** ⚡\n"
+        "  👑 **TELANGANA MASTER BOT - CONTROL PANEL** 👑\n"
         "╚════════════════════════════╝\n\n"
         f"👤 **Access Level:** `{'OWNER (Full)' if user_id == OWNER_ID else f'AGENT ({perms})'}`\n"
         f"⏳ **Validity / Expiry:** `{exp_date if exp_date else 'Lifetime'}`\n"
         "🟢 **Server Status:** 24/7 Cloud Running 🚀\n"
         f"🎙️ **Active In VC:** `{active_count}` IDs | 📱 **Accounts:** `{saved_count}`\n"
         f"🏢 **Connected Chats:** `{groups_count}` Groups | 👮 **Active Admins:** `{sub_admins}`\n"
-        f"🛡️ **Protection Engine:** {prot_status}\n\n"
+        f"🛡️ **Anti-Link Guard:** {prot_status}\n\n"
         "Neeche diye gaye buttons se complete control karein:"
     )
 
-async def broadcast_card(photo_id, caption_text):
-    groups = db_get_all_groups()
-    for cid, title in groups:
-        sent = False
-        if photo_id:
-            try:
-                await bot.send_photo(cid, photo=photo_id, caption=caption_text)
-                sent = True
-            except Exception as ex:
-                logger.warning(f"Photo send error: {ex}")
-
-        if not sent:
-            try:
-                await bot.send_message(cid, caption_text)
-            except Exception as e:
-                logger.error(f"Fallback fail for {cid}: {e}")
-
-def get_current_30s_period():
-    now = datetime.now(timezone.utc)
-    date_part = now.strftime("%Y%m%d")
-    cycle_index = (now.hour * 3600 + now.minute * 60 + now.second) // 30 + 1
-    return f"{date_part}1000{cycle_index:04d}"
-
-async def color_trading_loop():
-    logger.info("WinGo 30s Loop Started")
-    while SYSTEM_STATE["GROUP_PROTECTION"]:
-        try:
-            current_period = get_current_30s_period()
-            big_photo = db_get_setting("BIG_PHOTO")
-            small_photo = db_get_setting("SMALL_PHOTO")
-
-            if SYSTEM_STATE["LAST_PREDICTION"]:
-                last = SYSTEM_STATE["LAST_PREDICTION"]
-                pred_type = last["type"]
-                lucky_nums = last["numbers"]
-
-                is_win_round = random.random() < 0.85
-
-                if is_win_round:
-                    actual_type = pred_type
-                    actual_num = random.choice([5, 6, 7, 8, 9] if actual_type == "BIG" else [0, 1, 2, 3, 4])
-                    res_photo = big_photo if actual_type == "BIG" else small_photo
-                    res_caption = (
-                        "🏆✅ **BIG WIN - PASS!** ✅🏆\n"
-                        f"🎯 Period: `{last['period']}` | Outcome: `{actual_type}` [{actual_num}]\n"
-                        "👑 **VIP Accuracy 100% Sure Shot!**"
-                    )
-                    await broadcast_card(res_photo, res_caption)
-                else:
-                    actual_type = "SMALL" if pred_type == "BIG" else "BIG"
-                    actual_num = random.choice([5, 6, 7, 8, 9] if actual_type == "BIG" else [0, 1, 2, 3, 4])
-                    res_photo = big_photo if actual_type == "BIG" else small_photo
-                    res_caption = (
-                        "💔⚠️ **LOSS - 3X RECOVERY** ⚠️💔\n"
-                        f"🎯 Period: `{last['period']}` | Outcome: `{actual_type}` [{actual_num}]\n"
-                        "🛡️ **Next Trade 100% Guaranteed Recovery!**"
-                    )
-                    await broadcast_card(res_photo, res_caption)
-
-                await asyncio.sleep(2)
-
-            next_pred_type = random.choice(["BIG", "SMALL"])
-            next_lucky = random.sample([5, 6, 7, 8, 9] if next_pred_type == "BIG" else [0, 1, 2, 3, 4], 2)
-
-            SYSTEM_STATE["LAST_PREDICTION"] = {
-                "period": current_period,
-                "type": next_pred_type,
-                "numbers": next_lucky
-            }
-
-            photo_to_send = big_photo if next_pred_type == "BIG" else small_photo
-            lucky_str = f"{next_lucky[0]}, {next_lucky[1]}"
-
-            signal_caption = (
-                "━━━━━━━━━━━━━━━━━━━━\n\n"
-                "┣ᴡɪɴɢᴏ 30 ꜱᴇᴄ 🗣\n"
-                f"┣☞︎𝑃𝐸𝑅𝐼𝑂𝐷 → ( {current_period} )\n\n"
-                f"⚙️ 𝑆𝐼𝐺𝑁𝐴𝐿 ──➤ {next_pred_type}\n\n"
-                f"➡️ 𝑁𝑈𝑀𝐵𝐸𝑅 → {lucky_str}\n"
-                "➖➖➖➖➖➖➖➖➖➖\n"
-                "🟢 🟢 🟢 🟢 🟢 🟢 🟢 🟢\n"
-                "👑 **VIP REGISTER & JOINING LINK:**\n"
-                f"🔗 {VIP_REGISTER_LINK}"
-            )
-
-            await broadcast_card(photo_to_send, signal_caption)
-
-        except Exception as e:
-            logger.error(f"30s loop error: {e}")
-
-        now_sec = datetime.now(timezone.utc).second % 30
-        sleep_time = max(3, 30 - now_sec)
-        await asyncio.sleep(sleep_time)
-
-# Auto Photo Save Feature
 @bot.on_message(filters.photo & filters.private)
 async def auto_save_photo(client, message):
     fid = message.photo.file_id
@@ -325,14 +232,14 @@ async def auto_save_photo(client, message):
     if mode == "BIG":
         db_set_setting("BIG_PHOTO", fid)
         SYSTEM_STATE["SET_PHOTO_MODE"] = None
-        await message.reply_text("✅ **BIG वाली फोटो सफलतापूर्वक सेव हो गई है!** 🎉", reply_markup=get_dashboard_keyboard(message.from_user.id))
+        await message.reply_text("✅ **BIG wali photo successfully save ho gayi hai!** 🎉", reply_markup=get_dashboard_keyboard(message.from_user.id))
     elif mode == "SMALL":
         db_set_setting("SMALL_PHOTO", fid)
         SYSTEM_STATE["SET_PHOTO_MODE"] = None
-        await message.reply_text("✅ **SMALL वाली फोटो सफलतापूर्वक सेव हो गई है!** 🎉", reply_markup=get_dashboard_keyboard(message.from_user.id))
+        await message.reply_text("✅ **SMALL wali photo successfully save ho gayi hai!** 🎉", reply_markup=get_dashboard_keyboard(message.from_user.id))
     else:
         await message.reply_text(
-            "📸 **फोटो रिसीव हो गई!**\n\nइसे सेट करने के लिए पहले डैशबोर्ड पर **SET BIG PHOTO** या **SET SMALL PHOTO** का बटन दबाएँ!",
+            "📸 **Photo mili!** Isko set karne ke liye pehle Dashboard par **SET BIG PHOTO** ya **SET SMALL PHOTO** dabayein.",
             reply_markup=get_dashboard_keyboard(message.from_user.id)
         )
 
@@ -438,7 +345,7 @@ async def start_private_cmd(client, message):
     uid = message.from_user.id
     has_access, _, _ = check_user_access(uid)
     if not has_access:
-        await message.reply_text("🔒 **Access Denied:** Aapke paas is bot ka access nahi hai. Owner se contact karein.")
+        await message.reply_text("🔒 **Access Denied:** Aapke paas access nahi hai. Owner se contact karein.")
         return
     await message.reply_text(get_dashboard_text(uid), reply_markup=get_dashboard_keyboard(uid))
 
@@ -446,7 +353,7 @@ async def start_private_cmd(client, message):
 async def start_group_cmd(client, message):
     db_add_group(message.chat.id, message.chat.title or "Telegram Chat")
     try:
-        ack = await message.reply_text("🛡️ **Group registered for WinGo 30s Signals & Protection.**")
+        ack = await message.reply_text("🛡️ **Group registered with Master Bot.**")
         await asyncio.sleep(3)
         await ack.delete()
     except Exception:
@@ -469,7 +376,7 @@ async def auto_group_guard(client, message):
             try:
                 await message.delete()
                 uname = message.from_user.mention if message.from_user else "Member"
-                warn = await message.reply_text(f"🛡️ **Security Alert:** {uname}, links allow nahi hain!")
+                warn = await message.reply_text(f"🛡️ **Security Alert:** {uname}, external links allow nahi hain!")
                 await asyncio.sleep(4)
                 await warn.delete()
             except Exception as e:
@@ -539,14 +446,13 @@ async def message_dispatcher(client, message):
     uid = message.from_user.id
     txt = message.text.strip()
 
-    # Input: Add Agent / Sub-Admin with Date & Permissions
     if uid in SYSTEM_STATE["WAITING_DATE_INPUT"]:
         SYSTEM_STATE["WAITING_DATE_INPUT"].remove(uid)
         parts = txt.split()
         if len(parts) < 4:
             await message.reply_text(
-                "❌ **Galat Format!**\nSahi format aise likhein:\n`<UserID> <GroupID> <Permissions> <Days>`\n\n"
-                "**Example:**\n`12345678 -100987654321 ALL 30`\n(Permissions: `ALL` ya `TRADING` ya `VC`)"
+                "❌ **Galat Format!**\nSahi format:\n`<UserID> <GroupID> <Permissions> <Days>`\n\n"
+                "**Example:**\n`6454597633 -100123456789 ALL 30`"
             )
             return
         try:
@@ -560,39 +466,37 @@ async def message_dispatcher(client, message):
             db_add_group(target_gid, f"Agent Group ({target_uid})")
 
             await message.reply_text(
-                f"✅ **Agent Access Successfully Added!**\n\n"
+                f"✅ **Agent Access Added!**\n\n"
                 f"👤 **User ID:** `{target_uid}`\n"
                 f"🏢 **Group ID:** `{target_gid}`\n"
                 f"🛡️ **Permissions:** `{perms}`\n"
-                f"📅 **Expiry Date:** `{exp_date}` ({days} Din)\n\n"
-                "Ab is agent aur iske group me bot access active ho chuka hai!",
+                f"📅 **Expiry:** `{exp_date}` ({days} Din)",
                 reply_markup=get_dashboard_keyboard(uid)
             )
         except Exception as e:
             await message.reply_text(f"❌ Error: `{e}`")
         return
 
-    # Input: Remove Admin
     if uid in SYSTEM_STATE["WAITING_DEL_ADMIN"]:
         SYSTEM_STATE["WAITING_DEL_ADMIN"].remove(uid)
         try:
             target_uid = int(txt)
             db_remove_sub_admin(target_uid)
-            await message.reply_text(f"🗑️ **Agent ID `{target_uid}` ka access revoke kar diya gaya hai.**", reply_markup=get_dashboard_keyboard(uid))
+            await message.reply_text(f"🗑️ **Agent ID `{target_uid}` ka access remove kar diya gaya.**", reply_markup=get_dashboard_keyboard(uid))
         except Exception:
-            await message.reply_text("❌ Sahi numeric User ID bhejein.")
+            await message.reply_text("❌ Numeric User ID bhejein.")
         return
 
     if uid in SYSTEM_STATE["WAITING_CUSTOM_COUNT"]:
         target_link = SYSTEM_STATE["WAITING_CUSTOM_COUNT"].pop(uid)
         if not txt.isdigit() or int(txt) <= 0:
-            await message.reply_text("❌ Kripya valid number dalein.")
+            await message.reply_text("❌ Valid number daalein.")
             return
         count = int(txt)
         prog = await message.reply_text(f"⏳ **{count} IDs ko VC me baithaya ja raha hai...**")
         joined, err = await join_target_vc_process(target_link, limit_count=count)
         if joined > 0:
-            await prog.edit_text(f"🎙️ **SUCCESS!** Kul `{joined}` IDs VC me baith chuki hain! 🚀")
+            await prog.edit_text(f"🎙️ **SUCCESS!** Kul `{joined}` IDs VC me join ho gayi hain! 🚀")
         else:
             await prog.edit_text(f"⚠️ **0 IDs Join hui.**\nKaran: `{err}`")
         return
@@ -606,7 +510,7 @@ async def message_dispatcher(client, message):
                 await bot.leave_chat(cid)
                 await message.reply_text(f"🚪 **Group `{cid}` se bot exit ho gaya.**", reply_markup=get_dashboard_keyboard(uid))
             except Exception as ex:
-                await message.reply_text(f"⚠️ Removed from DB. Leave Error: `{ex}`", reply_markup=get_dashboard_keyboard(uid))
+                await message.reply_text(f"⚠️ DB se hat gaya. Leave Error: `{ex}`", reply_markup=get_dashboard_keyboard(uid))
         except ValueError:
             await message.reply_text("❌ Sahi numeric Chat ID bhejein.")
         return
@@ -617,7 +521,7 @@ async def message_dispatcher(client, message):
             await message.reply_text("❌ Pehle `/login +91XXXXXXXXXX` se account save karein.")
             return
         SYSTEM_STATE["PENDING_VC_TARGET"][uid] = txt
-        await message.reply_text(f"🎯 **Target Set:** `{txt}`\n📱 **Available IDs:** `{total_avail}`\n\nKitne members baithane hain? Choose karein:", reply_markup=InlineKeyboardMarkup([
+        await message.reply_text(f"🎯 **Target:** `{txt}`\n📱 **Available IDs:** `{total_avail}`\n\nKitne members baithane hain? Choose karein:", reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("👤 1 ID", callback_data="joinvc_cnt_1"), InlineKeyboardButton("👥 5 IDs", callback_data="joinvc_cnt_5"), InlineKeyboardButton("🔟 10 IDs", callback_data="joinvc_cnt_10")],
             [InlineKeyboardButton("⚡ 20 IDs", callback_data="joinvc_cnt_20"), InlineKeyboardButton("🔥 50 IDs", callback_data="joinvc_cnt_50"), InlineKeyboardButton("🚀 ALL IDs", callback_data="joinvc_cnt_all")],
             [InlineKeyboardButton("❌ CANCEL", callback_data="cancel_vc_flow")]
@@ -654,42 +558,34 @@ async def callback_dispatcher(client, query):
     has_access, perms, _ = check_user_access(uid)
 
     if not has_access:
-        await query.answer("Access Denied! Contact Owner.", show_alert=True)
+        await query.answer("Access Denied!", show_alert=True)
         return
 
     if d == "btn_admin_manager":
         if uid != OWNER_ID:
-            await query.answer("Sirf Main Owner hi Date aur Access manage kar sakta hai!", show_alert=True)
+            await query.answer("Sirf Main Owner access manage kar sakta hai!", show_alert=True)
             return
         await query.answer()
         await query.message.reply_text(
-            "📅 **AGENT ACCESS & DATE MANAGER:**\n════════════════════════════\n\n"
-            "Kisi agent/admin ko date ke hisaab se access dene ke liye format me reply karein:\n\n"
-            "`<UserID> <GroupID> <Permissions> <Days>`\n\n"
-            "**Permissions Options:**\n"
-            "• `ALL` (Sabhi features: Trading + VC + Views)\n"
-            "• `TRADING` (Sirf WinGo Signals)\n"
-            "• `VC` (Sirf VC Booster)\n\n"
-            "**Example:**\n`6454597633 -100123456789 ALL 30`\n*(Isse 30 din ka full access set ho jayega)*"
+            "📅 **AGENT ACCESS MANAGER:**\n\nFormat me reply karein:\n`<UserID> <GroupID> <Permissions> <Days>`\n\n"
+            "**Example:**\n`6454597633 -100123456789 ALL 30`"
         )
         SYSTEM_STATE["WAITING_DATE_INPUT"].add(uid)
         return
 
     elif d == "btn_show_table":
         sub_admins = db_get_all_sub_admins()
-        txt = "📊 **ADMINS, AGENTS & EXPIRY TABLE:**\n"
-        txt += "════════════════════════════\n"
-        txt += f"👑 **MAIN OWNER:** `{OWNER_ID}` [LIFETIME - ALL]\n\n"
+        txt = "📊 **ADMINS & EXPIRY TABLE:**\n════════════════════════════\n"
+        txt += f"👑 **MAIN OWNER:** `{OWNER_ID}` [LIFETIME]\n\n"
 
         if not sub_admins:
-            txt += "_Abhi koi Sub-Admin/Agent active nahi hai._\n"
+            txt += "_Abhi koi Sub-Admin active nahi hai._\n"
         else:
             txt += "| USER ID | GROUP ID | ACCESS | EXPIRY |\n"
             txt += "|---|---|---|---|\n"
             for a_uid, a_gid, a_perms, a_exp in sub_admins:
                 txt += f"• `{a_uid}` | `{a_gid}` | **{a_perms}** | `{a_exp}`\n"
 
-        txt += "════════════════════════════\n"
         await query.message.reply_text(txt, reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("🗑️ REMOVE AGENT", callback_data="btn_delete_agent")]
         ]))
@@ -702,30 +598,24 @@ async def callback_dispatcher(client, query):
             return
         SYSTEM_STATE["WAITING_DEL_ADMIN"].add(uid)
         await query.answer()
-        await query.message.reply_text("🗑️ Jis Agent ko remove karna hai uski **User ID** bhejein:")
+        await query.message.reply_text("🗑️ Jis Agent ko nikalna hai uski **User ID** bhejein:")
         return
 
     elif d == "btn_set_big_photo":
         SYSTEM_STATE["SET_PHOTO_MODE"] = "BIG"
         await query.answer()
-        await query.message.reply_text("📸 **Ab chat mein apni BIG wali photo bhej kar save kar lein!**")
+        await query.message.reply_text("📸 **Ab chat mein BIG photo bhej kar save kar lein!**")
         return
 
     elif d == "btn_set_small_photo":
         SYSTEM_STATE["SET_PHOTO_MODE"] = "SMALL"
         await query.answer()
-        await query.message.reply_text("📸 **Ab chat mein apni SMALL wali photo bhej kar save kar lein!**")
+        await query.message.reply_text("📸 **Ab chat mein SMALL photo bhej kar save kar lein!**")
         return
 
     elif d == "start_24h_protection":
-        if perms not in ["ALL", "TRADING"] and uid != OWNER_ID:
-            await query.answer("Aapko Color Trading Signals ka access nahi mila hai!", show_alert=True)
-            return
         SYSTEM_STATE["GROUP_PROTECTION"] = True
-        if not SYSTEM_STATE["PREDICTION_TASK"] or SYSTEM_STATE["PREDICTION_TASK"].done():
-            SYSTEM_STATE["PREDICTION_TASK"] = asyncio.create_task(color_trading_loop())
-
-        await query.answer("🛡️ 24-Hour WinGo 30s Protection Shuru!", show_alert=True)
+        await query.answer("🛡️ Group Anti-Link Guard Active!", show_alert=True)
         try:
             await query.message.edit_text(get_dashboard_text(uid), reply_markup=get_dashboard_keyboard(uid))
         except MessageNotModified:
@@ -734,10 +624,7 @@ async def callback_dispatcher(client, query):
 
     elif d == "stop_24h_protection":
         SYSTEM_STATE["GROUP_PROTECTION"] = False
-        if SYSTEM_STATE["PREDICTION_TASK"]:
-            SYSTEM_STATE["PREDICTION_TASK"].cancel()
-
-        await query.answer("🛑 Protection Band kar di gayi!", show_alert=True)
+        await query.answer("🛑 Protection Guard Stopped!", show_alert=True)
         try:
             await query.message.edit_text(get_dashboard_text(uid), reply_markup=get_dashboard_keyboard(uid))
         except MessageNotModified:
@@ -759,7 +646,7 @@ async def callback_dispatcher(client, query):
         prog = await query.message.reply_text(f"⏳ **{lbl} IDs ko VC me baithaya ja raha hai...**")
         joined, err = await join_target_vc_process(target_link, limit_count=count)
         if joined > 0:
-            await prog.edit_text(f"🎙️ **SUCCESS!** Kul `{joined}` IDs VC me enter ho chuki hain! 🚀")
+            await prog.edit_text(f"🎙️ **SUCCESS!** Kul `{joined}` IDs VC me baith chuki hain! 🚀")
         else:
             await prog.edit_text(f"⚠️ **0 IDs Join hui.**\nKaran: `{err}`")
         return
@@ -810,7 +697,7 @@ async def callback_dispatcher(client, query):
 
     elif d in ["reaction_views_info", "trigger_views_btn", "trigger_reactions_btn"]:
         await query.answer()
-        await query.message.reply_text("👁️ **500+ Views & Reactions Booster:**\nApne channel ka post link DM mein bhejein, bot turant 500+ views deliver karega.")
+        await query.message.reply_text("👁️ **500+ Views & Reactions Booster:**\nPost link bhejein, bot multi-reactions aur views inject karega.")
         return
 
     elif d == "add_phone_info":
@@ -822,17 +709,13 @@ async def callback_dispatcher(client, query):
         await query.answer(f"Total Accounts: {len(db_get_all_sessions())}", show_alert=True)
         return
 
-    elif d == "force_reconnect":
-        await query.answer("Force reconnect initiated!", show_alert=True)
-        return
-
 async def start_services():
     try:
         await bot.start()
         print("Telangana Unified Master Bot Live 🚀", flush=True)
 
         app = web.Application()
-        app.router.add_get('/', lambda r: web.Response(text="Bot 24/7 Running"))
+        app.router.add_get('/', lambda r: web.Response(text="Bot 24/7 Running Active"))
         runner = web.AppRunner(app)
         await runner.setup()
 
@@ -847,5 +730,4 @@ async def start_services():
         print(f"CRASH OCCURRED: {e}", file=sys.stderr, flush=True)
 
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
     loop.run_until_complete(start_services())
