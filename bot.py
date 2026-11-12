@@ -130,8 +130,7 @@ SYSTEM_STATE = {
     "GROUP_PROTECTION": False,
     "INCLUDE_VIP_LINK": False,
     "WAITING_ADMIN_INPUT": set(),
-    "WAITING_DEL_ADMIN": set(),
-    "SET_MEDIA_MODE": None
+    "WAITING_DEL_ADMIN": set()
 }
 
 def get_dashboard_keyboard(user_id):
@@ -261,7 +260,7 @@ async def auto_group_guard(client, message):
             except Exception as e:
                 logger.error(f"Auto delete fail: {e}")
 
-# Media Upload Catchers for Promo Kit
+# Media Upload Catchers (Only Video, APK/Doc, and Voice — No Photos)
 @bot.on_message(filters.video & filters.private)
 async def catch_promo_video(client, message):
     if message.from_user.id == OWNER_ID:
