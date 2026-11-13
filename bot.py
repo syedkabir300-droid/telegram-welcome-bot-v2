@@ -19,14 +19,15 @@ from pyrogram.errors import MessageNotModified
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("AutoWelcomeMasterBot")
 
-API_ID = int(os.environ.get("API_ID", "38476624"))
-API_HASH = os.environ.get("API_HASH", "6138b409afb06ddb68a735f360092e19")
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "9174050495:AAGDdZ-Tm6NLxDs0Pqz_l1dmGKschjz55Cs")
+# Updated Verified Credentials
+API_ID = int(os.environ.get("API_ID", "36895505"))
+API_HASH = os.environ.get("API_HASH", "e699980c3258bc0303a731e3c1594b97")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "9267837824:AAEYKspi8C6LEp1SmGaIcq460ZHYalIQlaU")
 OWNER_ID = int(os.environ.get("OWNER_ID", "6454597633"))
 
 RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL", "")
 
-bot = Client("auto_welcome_master_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+bot = Client("master_bot_9267837824", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 DB_FILE = "master_database.db"
 
@@ -646,8 +647,12 @@ async def keep_alive_ping_loop(port):
 
 async def start_services():
     try:
+        # Clear any old webhook before starting polling
+        async with aiohttp.ClientSession() as s:
+            await s.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook?drop_pending_updates=true")
+
         await bot.start()
-        print("Master Bot Live and Ready 🚀", flush=True)
+        print("Master Bot Live with New Credentials 🚀", flush=True)
 
         app = web.Application()
         app.router.add_get('/', lambda r: web.Response(text="Bot is 24/7 Running Active"))
