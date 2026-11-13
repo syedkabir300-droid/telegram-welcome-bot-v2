@@ -19,10 +19,10 @@ from aiohttp import web
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("TelanganaMasterBot")
 
-# Verified Credentials
-API_ID = int(os.environ.get("API_ID", "38476624"))
-API_HASH = os.environ.get("API_HASH", "6138b409afb06ddb68a735f360092e19")
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "9174050495:AAGDdZ-Tm6NLxDs0Pqz_l1dmGKschjz55Cs")
+# Verified Credentials (Updated)
+API_ID = int(os.environ.get("API_ID", "36895505"))
+API_HASH = os.environ.get("API_HASH", "e699980c3258bc0303a731e3c1594b97")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "9267837824:AAEYKspi8C6LEp1SmGaIcq460ZHYalIQlaU")
 OWNER_ID = int(os.environ.get("OWNER_ID", "6454597633"))
 
 bot = Client("master_unified_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
